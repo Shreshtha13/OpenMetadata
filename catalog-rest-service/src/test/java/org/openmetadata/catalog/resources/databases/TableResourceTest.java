@@ -81,6 +81,7 @@ import org.openmetadata.catalog.exception.CatalogExceptionMessage;
 import org.openmetadata.catalog.jdbi3.TableRepository.TableEntityInterface;
 import org.openmetadata.catalog.resources.EntityResourceTest;
 import org.openmetadata.catalog.resources.databases.TableResource.TableList;
+import org.openmetadata.catalog.resources.locations.LocationResourceTest;
 import org.openmetadata.catalog.resources.services.DatabaseServiceResourceTest;
 import org.openmetadata.catalog.resources.tags.TagResourceTest;
 import org.openmetadata.catalog.type.ChangeDescription;
@@ -765,10 +766,9 @@ public class TableResourceTest extends EntityResourceTest<Table> {
   @Test
   void put_tableProfile_200(TestInfo test) throws IOException {
     Table table = createAndCheckEntity(create(test), adminAuthHeaders());
-    ColumnProfile c1Profile =
-        new ColumnProfile().withName("c1").withMax("100.0").withMin("10.0").withUniqueCount(100.0);
-    ColumnProfile c2Profile = new ColumnProfile().withName("c2").withMax("99.0").withMin("20.0").withUniqueCount(89.0);
-    ColumnProfile c3Profile = new ColumnProfile().withName("c3").withMax("75.0").withMin("25.0").withUniqueCount(77.0);
+    ColumnProfile c1Profile = new ColumnProfile().withName("c1").withMax(100.0).withMin(10.0).withUniqueCount(100.0);
+    ColumnProfile c2Profile = new ColumnProfile().withName("c2").withMax(99.0).withMin(20.0).withUniqueCount(89.0);
+    ColumnProfile c3Profile = new ColumnProfile().withName("c3").withMax(75.0).withMin(25.0).withUniqueCount(77.0);
     // Add column profiles
     List<ColumnProfile> columnProfiles = List.of(c1Profile, c2Profile, c3Profile);
     TableProfile tableProfile =
@@ -817,10 +817,10 @@ public class TableResourceTest extends EntityResourceTest<Table> {
   void put_tableInvalidTableProfileData_4xx(TestInfo test) throws IOException {
     Table table = createAndCheckEntity(create(test), adminAuthHeaders());
 
-    ColumnProfile c1Profile = new ColumnProfile().withName("c1").withMax("100").withMin("10.0").withUniqueCount(100.0);
-    ColumnProfile c2Profile = new ColumnProfile().withName("c2").withMax("99.0").withMin("20.0").withUniqueCount(89.0);
+    ColumnProfile c1Profile = new ColumnProfile().withName("c1").withMax(100.0).withMin(10.0).withUniqueCount(100.0);
+    ColumnProfile c2Profile = new ColumnProfile().withName("c2").withMax(99.0).withMin(20.0).withUniqueCount(89.0);
     ColumnProfile c3Profile =
-        new ColumnProfile().withName("invalidColumn").withMax("75").withMin("25").withUniqueCount(77.0);
+        new ColumnProfile().withName("invalidColumn").withMax(75.0).withMin(25.0).withUniqueCount(77.0);
     List<ColumnProfile> columnProfiles = List.of(c1Profile, c2Profile, c3Profile);
     TableProfile tableProfile =
         new TableProfile()
@@ -928,6 +928,35 @@ public class TableResourceTest extends EntityResourceTest<Table> {
     assertEquals(expected.getSql(), actual.getSql());
     assertEquals(expected.getModelType(), actual.getModelType());
     assertEquals(expected.getGeneratedAt(), actual.getGeneratedAt());
+  }
+
+  @Test
+  void get_deletedTableWithDeleteLocation(TestInfo test) throws HttpResponseException {
+    Object create = createRequest(getEntityName(test), "description", "displayName", USER_OWNER1);
+    // Create first time using POST
+    Table table = beforeDeletion(test, createEntity(create, adminAuthHeaders()));
+    Table tableBeforeDeletion = getEntity(table.getId(), null, TableResource.FIELDS, adminAuthHeaders());
+    // delete both
+    deleteEntity(tableBeforeDeletion.getId(), adminAuthHeaders());
+    new LocationResourceTest().deleteEntity(tableBeforeDeletion.getLocation().getId(), adminAuthHeaders());
+    Map<String, String> queryParams = new HashMap<>();
+    queryParams.put("include", "deleted");
+    Table tableAfterDeletion = getEntity(table.getId(), queryParams, TableResource.FIELDS, adminAuthHeaders());
+    validateDeletedEntity(create, tableBeforeDeletion, tableAfterDeletion, adminAuthHeaders());
+  }
+
+  @Test
+  void get_TableWithDeleteLocation(TestInfo test) throws HttpResponseException {
+    Object create = createRequest(getEntityName(test), "description", "displayName", USER_OWNER1);
+    // Create first time using POST
+    Table table = beforeDeletion(test, createEntity(create, adminAuthHeaders()));
+    Table tableBeforeDeletion = getEntity(table.getId(), null, TableResource.FIELDS, adminAuthHeaders());
+    // delete both
+    new LocationResourceTest().deleteEntity(tableBeforeDeletion.getLocation().getId(), adminAuthHeaders());
+    Map<String, String> queryParams = new HashMap<>();
+    queryParams.put("include", "all");
+    Table tableAfterDeletion = getEntity(table.getId(), queryParams, TableResource.FIELDS, adminAuthHeaders());
+    assertNull(tableAfterDeletion.getLocation());
   }
 
   @Test
@@ -1448,6 +1477,16 @@ public class TableResourceTest extends EntityResourceTest<Table> {
   }
 
   @Override
+  public Table beforeDeletion(TestInfo test, Table table) throws HttpResponseException {
+    // Add location to the table
+    CreateLocation create =
+        new CreateLocation().withName(getLocationName(test)).withService(AWS_STORAGE_SERVICE_REFERENCE);
+    Location location = createLocation(create, adminAuthHeaders());
+    addAndCheckLocation(table, location.getId(), OK, userAuthHeaders());
+    return table;
+  }
+
+  @Override
   public EntityReference getContainer(Object createRequest) throws URISyntaxException {
     return Entity.getEntityReference(DATABASE); // TODO clean this up
   }
@@ -1476,6 +1515,15 @@ public class TableResourceTest extends EntityResourceTest<Table> {
   public void validateUpdatedEntity(Table updated, Object request, Map<String, String> authHeaders)
       throws HttpResponseException {
     validateCreatedEntity(updated, request, authHeaders);
+  }
+
+  @Override
+  protected void validateDeletedEntity(
+      Object create, Table entityBeforeDeletion, Table entityAfterDeletion, Map<String, String> authHeaders)
+      throws HttpResponseException {
+    super.validateDeletedEntity(create, entityBeforeDeletion, entityAfterDeletion, authHeaders);
+
+    assertReference(entityBeforeDeletion.getLocation(), entityAfterDeletion.getLocation());
   }
 
   @Override
