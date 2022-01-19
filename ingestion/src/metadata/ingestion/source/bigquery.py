@@ -41,7 +41,8 @@ def get_columns(bq_schema):
             "precision": field.precision,
             "scale": field.scale,
             "max_length": field.max_length,
-            "raw_data_type": repr(_get_sqla_column_type(field)),
+            "raw_data_type": str(_get_sqla_column_type(field)),
+            "arrayDataType": field.field_type if field.mode == "REPEATED" else None
         }
         col_list.append(col_obj)
     return col_list
@@ -86,4 +87,4 @@ class BigquerySource(SQLSource):
         return segments[0], segments[1]
 
     def parse_raw_data_type(self, raw_data_type):
-        return raw_data_type.replace(", ", ",").replace(" ", ":").lower()
+        return str(raw_data_type).replace(", ", ",").replace(" ", ":").lower()
