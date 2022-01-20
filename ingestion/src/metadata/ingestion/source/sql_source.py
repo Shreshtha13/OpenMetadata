@@ -18,10 +18,6 @@ import traceback
 import uuid
 from typing import Dict, Iterable, List, Optional, Tuple
 
-from sqlalchemy import create_engine
-from sqlalchemy.engine.reflection import Inspector
-from sqlalchemy.inspection import inspect
-
 from metadata.generated.schema.entity.data.database import Database
 from metadata.generated.schema.entity.data.table import (
     Column,
@@ -39,13 +35,15 @@ from metadata.ingestion.models.ometa_table_db import OMetaDatabaseAndTable
 from metadata.ingestion.models.table_metadata import DeleteTable
 from metadata.ingestion.ometa.ometa_api import OpenMetadata
 from metadata.ingestion.ometa.openmetadata_rest import MetadataServerConfig
-from metadata.utils.column_helpers import get_column_type
-from metadata.utils.column_type_parser import ColumnTypeParser
 from metadata.ingestion.source.sql_source_common import (
     SQLConnectionConfig,
     SQLSourceStatus,
 )
+from metadata.utils.column_type_parser import ColumnTypeParser
 from metadata.utils.helpers import get_database_service_or_create
+from sqlalchemy import create_engine
+from sqlalchemy.engine.reflection import Inspector
+from sqlalchemy.inspection import inspect
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -70,10 +68,10 @@ class SQLSource(Source[OMetaDatabaseAndTable]):
     """
 
     def __init__(
-        self,
-        config: SQLConnectionConfig,
-        metadata_config: MetadataServerConfig,
-        ctx: WorkflowContext,
+            self,
+            config: SQLConnectionConfig,
+            metadata_config: MetadataServerConfig,
+            ctx: WorkflowContext,
     ):
         super().__init__(ctx)
         self.config = config
@@ -131,7 +129,7 @@ class SQLSource(Source[OMetaDatabaseAndTable]):
 
     @classmethod
     def create(
-        cls, config_dict: dict, metadata_config_dict: dict, ctx: WorkflowContext
+            cls, config_dict: dict, metadata_config_dict: dict, ctx: WorkflowContext
     ):
         pass
 
@@ -179,7 +177,7 @@ class SQLSource(Source[OMetaDatabaseAndTable]):
                 yield from self.delete_tables(schema_fqdn)
 
     def fetch_tables(
-        self, inspector: Inspector, schema: str
+            self, inspector: Inspector, schema: str
     ) -> Iterable[OMetaDatabaseAndTable]:
         """
         Scrape an SQL schema and prepare Database and Table
@@ -242,7 +240,7 @@ class SQLSource(Source[OMetaDatabaseAndTable]):
                 continue
 
     def fetch_views(
-        self, inspector: Inspector, schema: str
+            self, inspector: Inspector, schema: str
     ) -> Iterable[OMetaDatabaseAndTable]:
         """
         Get all views in the SQL schema and prepare
@@ -281,7 +279,7 @@ class SQLSource(Source[OMetaDatabaseAndTable]):
                     name=view_name.replace(".", "_DOT_"),
                     tableType="View",
                     description=_get_table_description(schema, view_name, inspector)
-                    or "",
+                                or "",
                     # This will be generated in the backend!! #1673
                     fullyQualifiedName=view_name,
                     columns=self._get_columns(schema, view_name, inspector),
@@ -379,7 +377,7 @@ class SQLSource(Source[OMetaDatabaseAndTable]):
         return None
 
     def _parse_data_model_columns(
-        self, model_name: str, mnode: Dict, cnode: Dict
+            self, model_name: str, mnode: Dict, cnode: Dict
     ) -> [Column]:
         columns = []
         ccolumns = cnode.get("columns")
@@ -388,7 +386,7 @@ class SQLSource(Source[OMetaDatabaseAndTable]):
             ccolumn = ccolumns[key]
             try:
                 ctype = ccolumn["type"]
-                col_type = get_column_type(ctype)
+                col_type = ColumnTypeParser.get_column_type(ctype)
                 description = manifest_columns.get(key.lower(), {}).get(
                     "description", None
                 )
@@ -415,7 +413,7 @@ class SQLSource(Source[OMetaDatabaseAndTable]):
 
     @staticmethod
     def _get_column_constraints(
-        column, pk_columns, unique_columns
+            column, pk_columns, unique_columns
     ) -> Optional[Constraint]:
         """
         Prepare column constraints for the Table Entity
@@ -435,7 +433,7 @@ class SQLSource(Source[OMetaDatabaseAndTable]):
         return constraint
 
     def _get_columns(
-        self, schema: str, table: str, inspector: Inspector
+            self, schema: str, table: str, inspector: Inspector
     ) -> Optional[List[Column]]:
         """
         Get columns types and constraints information
@@ -480,8 +478,8 @@ class SQLSource(Source[OMetaDatabaseAndTable]):
                     parsed_string = None
 
                     if (
-                        "raw_data_type" in column
-                        and column["raw_data_type"] is not None
+                            "raw_data_type" in column
+                            and column["raw_data_type"] is not None
                     ):
                         column["raw_data_type"] = self.parse_raw_data_type(
                             column["raw_data_type"]
@@ -491,9 +489,9 @@ class SQLSource(Source[OMetaDatabaseAndTable]):
                         )
                         parsed_string["name"] = column["name"]
                     else:
-                        col_type = get_column_type(column["type"])
+                        col_type = ColumnTypeParser.get_column_type(column["type"])
                         if col_type == "ARRAY" and re.match(
-                            r"(?:\w*)(?:\()(\w*)(?:.*)", str(column["type"])
+                                r"(?:\w*)(?:\()(\w*)(?:.*)", str(column["type"])
                         ):
                             arr_data_type = re.match(
                                 r"(?:\w*)(?:[(]*)(\w*)(?:.*)", str(column["type"])
@@ -505,9 +503,9 @@ class SQLSource(Source[OMetaDatabaseAndTable]):
                             arr_data_type = "STRUCT"
                             data_type_display = (
                                 repr(column["type"])
-                                .replace("(", "<")
-                                .replace(")", ">")
-                                .lower()
+                                    .replace("(", "<")
+                                    .replace(")", ">")
+                                    .lower()
                             )
                         col_constraint = self._get_column_constraints(
                             column, pk_columns, unique_columns
@@ -556,15 +554,15 @@ class SQLSource(Source[OMetaDatabaseAndTable]):
                                 else column["type"].length
                             )
                         elif (
-                            "arrayDataType" in column
-                            and column["arrayDataType"] is not None
+                                "arrayDataType" in column
+                                and column["arrayDataType"] is not None
                         ):
-                            parsed_string["arrayDataType"] = get_column_type(
+                            parsed_string["arrayDataType"] = ColumnTypeParser.get_column_type(
                                 column["arrayDataType"]
                             )
                             parsed_string[
                                 "dataTypeDisplay"
-                            ] = f"{repr(column['type']).replace('(','<').replace(')','>').lower()}"
+                            ] = f"{repr(column['type']).replace('(', '<').replace(')', '>').lower()}"
                         if "arrayDataType" in column:
                             parsed_string["arrayDataType"] = column["arrayDataType"]
                             parsed_string[
